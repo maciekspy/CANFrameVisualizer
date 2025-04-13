@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>CAN Frame Visualizer</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+  <div class="container my-4">
+    <h1 class="text-center mb-4">CAN Frame Visualizer</h1>
+    <div class="row">
+      <div class="col-md-12">
+        <form id="frameForm">
+          <div class="mb-3">
+            <label for="bitInput" class="form-label">Enter a string of bits (only 0s and 1s):</label>
+            <input type="text" class="form-control" id="bitInput" placeholder="e.g. 101010111000"
+              value="000001000100100000110000110110011011101100100000100101011111111111" required>
+          </div>
+          <div id="frameImg" class="mt-4"></div>
+          <div class="d-flex">
+            <div>
+              <input type="checkbox" id="hideStuffBits" class="btn btn-primary" value="Hide stuff bits">
+              <label for="hideStuffBits" class="">Hide Stuff Bits</label>
+            </div>
+            <div class="ms-auto">
+              <select id="formatSelector" class="form-select"
+                style="width:100px;display:inline-block;margin-right:10px;">
+                <option value="svg">SVG</option>
+                <option value="png">PNG</option>
+              </select>
+              <button id="downloadBtn" class="btn btn-primary" onclick="downloadImage(event)">Download Image</button>
+            </div>
+          </div>
+        </form>
+        <hr>
+        <div id="error-list" class="alert alert-danger d-none" role="alert"></div>
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="frame-details-btn" data-bs-toggle="tab"
+              data-bs-target="#frame-details-tab" type="button" role="tab" aria-controls="frame-details-tab"
+              aria-selected="true">Frame Details</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="stuff-bits-btn" data-bs-toggle="tab" data-bs-target="#stuff-bits-tab"
+              type="button" role="tab" aria-controls="stuff-bits-tab" aria-selected="true">Stuff Bits</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="crc-btn" data-bs-toggle="tab" data-bs-target="#crc-tab" type="button"
+              role="tab" aria-controls="crc-tab" aria-selected="true">CRC Calculation</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="example-btn" data-bs-toggle="tab" data-bs-target="#example-tab" type="button"
+              role="tab" aria-controls="example-tab" aria-selected="true">Example Data</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="raw-frame-btn" data-bs-toggle="tab" data-bs-target="#raw-frame-tab"
+              type="button" role="tab" aria-controls="raw-frame-tab" aria-selected="true">Raw Frame JSON</button>
+          </li>
+          <!--- right side -->
+          <li class="nav-item ms-auto mb-2 mb-lg-0" role="presentation">
+            <button class="nav-link" id="about-btn" data-bs-toggle="tab" data-bs-target="#about-tab" type="button"
+              role="tab" aria-controls="about-tab" aria-selected="true">About</button>
+          </li>
+        </ul>
+        <div class="tab-content" id="myTabContent">
+          <div class="tab-pane fade show active" id="frame-details-tab" role="tabpanel"
+            aria-labelledby="frame-details-btn">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Field name</th>
+                  <th scope="col">Length (bits)</th>
+                  <th scope="col">Value</th>
+                  <th scope="col">Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Start of Frame</td>
+                  <td>1</td>
+                  <td id="sofValue"></td>
+                  <td>
+                    The Start of Frame is a single dominant bit that marks the beginning of the CAN frame.
+                    It signals all nodes on the bus to start synchronizing and prepares them to sample the following
+                    bits.
+                    Since it’s used for synchronization, its value is fixed (typically a dominant “0”) in all CAN
+                    transmissions.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Identifier</td>
+                  <td id="idLength">11</td>
+                  <td id="idValue"></td>
+                  <td>
+                    This field uniquely identifies the message and determines its priority.
+                    In standard CAN (CAN 2.0A), the Identifier is 11 bits long.
+                    A lower numerical value indicates a higher priority.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Remote transmission request (RTR)</td>
+                  <td>1</td>
+                  <td id="rtrValue"></td>
+                  <td>
+                    The RTR bit differentiates between a data frame and a remote frame.
+                    A value of 0 indicates a data frame (i.e., the frame carries data),
+                    while a value of 1 would indicate a remote frame (i.e., a request for a data frame from another
+                    node).
+                  </td>
+                </tr>
+                <tr>
+                  <td>Identifier extension bit (IDE)</td>
+                  <td>1</td>
+                  <td id="ideValue"></td>
+                  <td>
+                    The IDE bit specifies the format of the message’s identifier.
+                    A 0 value means that the frame uses the standard 11-bit identifier format; if the value were 1,
+                    it would indicate an extended 29-bit identifier format (CAN 2.0B).
+                  </td>
+                </tr>
+                <tr>
+                  <td>Reserved bit (r0)</td>
+                  <td>1</td>
+                  <td id="r0Value"></td>
+                  <td>
+                    This bit is reserved for future use or for error signaling in some implementations.
+                    In current standards, it is always set to 0. Its presence ensures backward compatibility if the
+                    protocol is extended later.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Data length code (DLC)</td>
+                  <td>4</td>
+                  <td id="dlcValue"></td>
+                  <td>
+                    The DLC field specifies the number of data bytes contained in the Data Field.
+                    Values range from 0 to 8.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Data field</td>
+                  <td id="dataLength">DLC*8</td>
+                  <td id="dataValue"></td>
+                  <td>
+                    This is the actual data payload transmitted by the frame.
+                    This field contains the message’s useful information and its length is determined by the DLC.
+                  </td>
+                </tr>
+                <tr>
+                  <td>CRC</td>
+                  <td>15</td>
+                  <td id="crcValue"></td>
+                  <td>
+                    The Cyclic Redundancy Check (CRC) field holds a 15-bit error-detection code calculated over the
+                    frame’s bit
+                    stream (from SOF up to the end of the Data Field, excluding stuff bits).
+                    The receiving node recomputes the CRC over the incoming frame and compares it to this value.
+                    A mismatch indicates a transmission error.
+                  </td>
+                </tr>
+                <tr>
+                  <td>CRC Delimiter</td>
+                  <td>1</td>
+                  <td id="crcDelimiterValue"></td>
+                  <td>
+                    This single-bit field, always recessive (1), follows the CRC field and serves as a delimiter.
+                    It clearly separates the CRC from the subsequent bits in the frame and gives time for completing CRC
+                    calculation
+                    and preparing for setting ACK bit if given recipient node wants to confirm its delivery.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Acknowledge (ACK)</td>
+                  <td>1</td>
+                  <td id="ackValue"></td>
+                  <td>
+                    After the CRC field, the ACK field is used by receivers to signal whether the message was received
+                    correctly.
+                    The transmitter initially sends a recessive bit (1) in the ACK slot.
+                    If one or more receivers detect the frame without error, they overwrite this with a dominant bit
+                    (0).
+                  </td>
+                </tr>
+                <tr>
+                  <td>ACK Delimiter</td>
+                  <td>1</td>
+                  <td id="ackDelimiterValue"></td>
+                  <td>
+                    This is a single, always recessive (1) bit that follows the ACK field.
+                    It acts as a boundary marker to ensure that the ACK field is properly delimited.
+                  </td>
+                </tr>
+                <tr>
+                  <td>End of Frame (EOF)</td>
+                  <td>7</td>
+                  <td id="eofValue"></td>
+                  <td>
+                    The EOF consists of seven consecutive recessive (1) bits that signal the end of the CAN frame.
+                    It provides a quiet period that allows nodes to re-synchronize before the next frame starts.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Inter-frame Spacing (IFS)</td>
+                  <td>3</td>
+                  <td id="ifsValue"></td>
+                  <td>
+                    The IFS is an idle period inserted after the EOF.
+                    It ensures that the bus remains in a recessive state for a short time between frames,
+                    giving all nodes sufficient time to prepare for the next frame’s reception.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="tab-pane fade py-4" id="stuff-bits-tab" role="tabpanel" aria-labelledby="crc-btn">
+            <h3>Stuff bits</h3>
+            In CAN 2.0, "stuff bits" are extra bits inserted into the data stream to prevent long sequences of
+            consecutive bits with the same value.
+            After five successive bits of identical polarity, a complementary bit (the stuff bit) is automatically
+            added.
+            This mechanism helps maintain synchronization and ensures that there are enough signal transitions for
+            reliable clock recovery at the receiving nodes.
+            Although the stuff bits are not part of the transmitted data, they are removed during error-checking at the
+            receiver,
+            ensuring that the original frame content is correctly restored.<br>
+            In the given frame stuff bits are marked with a magenta color and are on given positions:<br>
+            <ul id="stuff-bits-list">
+            </ul>
+          </div>
+          <div class="tab-pane fade py-4" id="crc-tab" role="tabpanel" aria-labelledby="crc-btn">
+            <h3>CRC Calculation</h3>
+            In CAN 2.0, the CRC (Cyclic Redundancy Check) is used for error detection.
+            The protocol computes a 15-bit CRC over the critical portions of the frame—from the start of frame up to the
+            end of the data field (after bit-stuffing removal).
+            This is done using modulo‑2 division with a specified generator polynomial, typically:
+            <pre> x<sup>14</sup> + x<sup>10</sup> + x<sup>8</sup> + x<sup>7</sup> + x<sup>4</sup> + x<sup>3</sup> + 1</pre>
+            The resulting remainder is appended to the frame, and the receiver recomputes the CRC on the received data.
+            A mismatch between the computed and transmitted CRC indicates an error, triggering corrective actions.
+          </div>
+          <div class="tab-pane fade py-4" id="example-tab" role="tabpanel" aria-labelledby="example-btn">
+            <h3>Example Data</h3>
+            <p>Here are some example CAN frames with their corresponding bit strings:</p>
+            TODO:
+          </div>
+          <div class="tab-pane fade py-4" id="raw-frame-tab" role="tabpanel" aria-labelledby="raw-frame-btn">
+            Raw data in JSON format from the created parser:
+            <textarea id="rawFrame" style="min-width: 100%; height: 600px;"></textarea>
+          </div>
+          <div class="tab-pane fade py-4" id="about-tab" role="tabpanel" aria-labelledby="about-btn">
+            <h3>About</h3>
+            Base mainly on Wikipedia article <a href="https://en.wikipedia.org/wiki/CAN_bus">CAN bus</a>, <a
+              href="https://www.iso.org/standard/86384.html">CAN Standard</a> documentation and teaching materials.<br>
+            Created as part of the "Industrial data transmission systems" course at Warsaw University of Technology as a
+            self-study and lab report preparation material.
+            <hr>
+            License: <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a><br>
+
+          </div>
+        </div>
+
+
+      </div>
+    </div>
+  </div>
+
+  <footer class="bg-dark text-white text-center py-1">
+    <div class="container">
+      2025 <a class="link-secondary" href="https://github.com/maciekspy">Maciej Spychała</a>, License <a
+        class="link-secondary" href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>, Source code at
+      GitHub
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="lib/snap.svg-min.js"></script>
+  <script src="js/can-frame.js"></script>
+  <script src="js/main.js"></script>
+</body>
+
+</html>
